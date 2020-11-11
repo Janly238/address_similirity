@@ -34,7 +34,7 @@ def get_dataset(addr_df):
     #给结果表拼接唯一识别代码
     e_data = addr_df[["公司代码", "公司简称"]]
     addr_cpca = pd.concat([e_data, addr_cp], axis=1)
-    print(addr_cpca)
+    # print(addr_cpca)
     '''
         公司代码   公司简称    省    市    区                                    地址
     0       1   平安银行  广东省  深圳市  罗湖区                             深南东路5047号
@@ -53,17 +53,17 @@ def get_dataset(addr_df):
     addr_cpca_1 = addr_cpca[(addr_cpca['省']!= '')&(addr_cpca['市']!= '') & (addr_cpca['区']!= '')]
     addr_cpca_1= addr_cpca_1.dropna()
     
-    addr_cpca_11= addr_cpca_1[(addr_cpca['地址']!='')]
-    addr_cpca_12= addr_cpca_11. dropna(subset=['地址'])
+    addr_cpca_1= addr_cpca_1[(addr_cpca['地址']!='')]
+    addr_cpca_1= addr_cpca_1. dropna(subset=['地址'])
     
     #将前三个字段完全拼接在一起进行分组然后组内进行相似度分析
-    addr_cpca_12['省市区'] = addr_cpca_12['省'] + addr_cpca_12['市'] + addr_cpca_12['区']
+    addr_cpca_1['省市区'] = addr_cpca_1['省'] + addr_cpca_1['市'] + addr_cpca_1['区']
     
-    addr_cpca_12['省市区长度']=addr_cpca_12['省市区'].apply(lambda x: len(x))
-    count_1 = addr_cpca_12['省市区'].value_counts().reset_index()
+    addr_cpca_1['省市区长度']=addr_cpca_1['省市区'].apply(lambda x: len(x))
+    count_1 = addr_cpca_1['省市区'].value_counts().reset_index()
     count_1= count_1.rename(columns={'index':'省市区', '省市区':'个数'})
-    print(addr_cpca_12)
-    print(count_1)
+    # print(addr_cpca_1)
+    # print(count_1)
     '''
     省市区  个数
     0  广东省深圳市罗湖区   3
@@ -75,8 +75,8 @@ def get_dataset(addr_df):
     '''
     
     count_delete_1= count_1[count_1['个数']==1]
-    dataset_1 = pd.merge(addr_cpca_12, count_delete_1, on = '省市区', how = 'left')
-    print(dataset_1)
+    dataset_1 = pd.merge(addr_cpca_1, count_delete_1, on = '省市区', how = 'left')
+    # print(dataset_1)
     '''merge合并，个数为1的填1，没有的话填nan
             公司代码   公司简称    省    市    区                                    地址        省市区  省市区长度   个数
     0       1   平安银行  广东省  深圳市  罗湖区                             深南东路5047号  广东省深圳市罗湖区      9  NaN
@@ -96,28 +96,28 @@ def get_dataset(addr_df):
     4  000006  深振业Ａ  广东省  深圳市  罗湖区  深南东路5048号  广东省深圳市罗湖区      9 NaN
     '''
 
-    print(dataset_1)
+    # print(dataset_1)
     
     #2.区为空  ,同样操作
     addr_cpca_2 = addr_cpca[(addr_cpca['省']!= '')&(addr_cpca['市']!= '') & (addr_cpca['区']== '')]
     addr_cpca_2 = addr_cpca_2.dropna()
     
-    addr_cpca_21= addr_cpca_2[(addr_cpca['地址']!='')]
-    addr_cpca_22= addr_cpca_21.dropna(subset=['地址'])
+    addr_cpca_2= addr_cpca_2[(addr_cpca['地址']!='')]
+    addr_cpca_2= addr_cpca_2.dropna(subset=['地址'])
     
     #将前三个字段完全拼接在一起进行分组然后组内进行相似度分析
-    addr_cpca_22['省市区'] = addr_cpca_22['省'] + addr_cpca_22['市']
+    addr_cpca_2['省市区'] = addr_cpca_2['省'] + addr_cpca_2['市']
     
-    addr_cpca_22['省市区长度']=addr_cpca_22['省市区'].apply(lambda x: len(x))
-    count_2 = addr_cpca_22['省市区'].value_counts().reset_index()
+    addr_cpca_2['省市区长度']=addr_cpca_2['省市区'].apply(lambda x: len(x))
+    count_2 = addr_cpca_2['省市区'].value_counts().reset_index()
     count_2= count_2.rename(columns={'index':'省市区', '省市区':'个数'})
     
     count_delete_2 = count_2[count_2['个数']==1]
-    dataset_2 = pd.merge(addr_cpca_22, count_delete_2, on = '省市区', how = 'left')
+    dataset_2 = pd.merge(addr_cpca_2, count_delete_2, on = '省市区', how = 'left')
     dataset_2 = dataset_2[dataset_2['个数']!=1]
     
     
-    print("Time used:", (time. clock()-start), "s")
+    # print("Time used:", (time. clock()-start), "s")
     
     return dataset_1, dataset_2
 
@@ -126,7 +126,7 @@ def get_dataset(addr_df):
 # print("-----------")
 # print(dataset_2)
 
-def cal_similar(doc_goal, document, ssim = 0.1):
+def cal_similar(doc_goal, document, ssim = 0.7):
 #def cal_similar(doc_goai, document):
     '''
     分词;计算文本相似度
@@ -150,15 +150,21 @@ def cal_similar(doc_goal, document, ssim = 0.1):
     
     #目标文档
     doc_goal_vec = dictionary.doc2bow(doc_goal_list)
-    index = similarities.SparseMatrixSimilarity(tfidf[corpus], num_features = len(dictionary.keys()))#对每个目标文档,分析测文档的相似度
-    print("index,",index)
+    # index = similarities.SparseMatrixSimilarity(tfidf[corpus], num_features = len(dictionary.keys()))#对每个目标文档,分析测文档的相似度
+    '''def __init__(self, corpus, num_features=None, num_terms=None, num_docs=None, num_nnz=None,
+                 num_best=None, chunksize=500, dtype=numpy.float32, maintain_sparsity=False):
+    def __init__(self, output_prefix, corpus, num_features, num_best=None, chunksize=256, shardsize=32768, norm='l2'):
+    '''
+        
+    index = similarities.Similarity(output_prefix=None,corpus=tfidf[corpus], num_features = len(dictionary.keys()))#对每个目标文档,分析测文档的相似度
+    # print("index,",index)
     #开始比较
     sims = index[tfidf[doc_goal_vec]]
-    print("sims:",sims)
+    # print("sims:",sims)
     #similary= sorted(enumerate(sims),key=lambda item: -item[1])#根据相似度排序
     
     addr_dict={"被比较地址": document, "相似度": list(sims)}
-    print("addr_dict:",addr_dict)
+    # print("addr_dict:",addr_dict)
     '''
     addr_dict: {'被比较地址': ['深南东路5046号', '深南东路5048号'], '相似度': [0.0, 0.0]}
     '''
@@ -167,7 +173,7 @@ def cal_similar(doc_goal, document, ssim = 0.1):
     similary["目标地址"] = doc_goal
     similary_data = similary[["目标地址", "被比较地址", "相似度"]]
     similary_data= similary_data[similary_data["相似度"]>=ssim]
-    print("similary_data:",similary_data)
+    # print("similary_data:",similary_data)
     '''
     similary_data:         目标地址      被比较地址  相似度
     0  深南东路5047号  深南东路5046号  0.0
@@ -228,8 +234,9 @@ def run_(par = 0):
     #调用上述函数
     addr_df = read_data()
     dataset_1, dataset_2 = get_dataset(addr_df)
-    #dataset. to_csv("../data/addr_data/document_address.csv", index =False)
-    #dataset. to_csv( ". /data/addr_data/document_address. csv", index False)
+    # dataset_1.to_csv("data/address1_cv.csv", index =False)
+    # dataset_2.to_csv("data/address2_cv.csv", index =False)
+    # dataset. to_csv( ". /data/addr_data/document_address. csv", index False)
     collect_data_1 = get_collect(dataset_1)
     collect_data_2 = get_collect(dataset_2)
     collect_data = pd.concat([collect_data_1, collect_data_2], axis=0)
@@ -240,6 +247,6 @@ def run_(par = 0):
     return collect_data
 
 
-collect_data = run_(par = 0.1)
+collect_data = run_(par = 0.7)
 print(collect_data)
 #collect_data.to_excel("data/result.xlsx")
