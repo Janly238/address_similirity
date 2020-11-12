@@ -121,10 +121,18 @@ def get_dataset(addr_df):
     
     return dataset_1, dataset_2
 
-# dataset_1, dataset_2 = get_dataset(df)
-# print(dataset_1)
-# print("-----------")
-# print(dataset_2)
+def dataset_cut_tfidf(dataset_1, dataset_2):
+    #分词
+    dataset_1["地址分词"]=[jieba.lcut(text) for text in dataset_1["地址"]]
+    dataset_2["地址分词"]=[jieba.lcut(text) for text in dataset_2["地址"]]
+
+    #合并所有词语并训练tfidf模型
+    all_doc_list = list(dataset_1["地址分词"])+list(dataset_2["地址分词"])
+    dictionary = corpora.Dictionary(all_doc_list)  #先用dictionary方法获词袋
+    dataset_1["地址词袋"]=[dictionary.doc2bow(doc) for doc in dataset_1["地址分词"]]
+    dataset_2["地址词袋"]=[dictionary.doc2bow(doc) for doc in dataset_2["地址分词"]]
+    tfidf = models.TfidfModel(list(dataset_1["地址词袋"])+list(dataset_2["地址词袋"]))#使用TF-DF模型对料库建模
+    return dataset_1, dataset_2,dictionary,tfidf
 
 def cal_similar(doc_goal, document, ssim = 0.7):
 #def cal_similar(doc_goai, document):
@@ -145,7 +153,7 @@ def cal_similar(doc_goal, document, ssim = 0.7):
     
     #被比较的多个文档
     dictionary = corpora.Dictionary(all_doc_list)  #先用dictionary方法获词袋
-    corpus = [dictionary.doc2bow(doc) for doc in all_doc_list]  #使用doc2bow制作预料库
+    corpus = [dictionary.doc2bow(doc) for doc in all_doc_list]  #使用doc2bow制作预料库 corpus[1]=[(0, 1), (1, 2), (2, 1), (3, 1), (4, 1), (5, 1)]
     tfidf = models.TfidfModel(corpus)#使用TF-DF模型对料库建模
     
     #目标文档
@@ -182,6 +190,41 @@ def cal_similar(doc_goal, document, ssim = 0.7):
     
     return similary_data
 
+
+def cal_similar2(doc_goal, doc_candidates, dictionary,tfidf, ssim = 0.7):
+    '''
+    分词;计算文本相似度
+    doc_goal,短文本,目标文档
+    document,多个文本,被比较的多个文档
+    '''
+    #目标地址词袋
+    doc_goal_vec = doc_goal[-1]#["公司代码","地址","地址分词","地址词袋"]].values
+
+    #目标地址
+    doc_goal_address = doc_goal[1]#["公司代码","地址","地址分词","地址词袋"]].values
+
+    index = similarities.Similarity(output_prefix=None,corpus=tfidf[list(doc_candidates["地址词袋"])], num_features = len(dictionary.keys()))#对每个目标文档,分析测文档的相似度
+    #开始比较
+    sims = index[tfidf[doc_goal_vec]]
+    #similary= sorted(enumerate(sims),key=lambda item: -item[1])#根据相似度排序
+    
+    addr_dict={"被比较地址": doc_candidates["地址"], "相似度": list(sims)}
+    '''
+    addr_dict: {'被比较地址': ['深南东路5046号', '深南东路5048号'], '相似度': [0.0, 0.0]}
+    '''
+
+    similary = pd.DataFrame(addr_dict)
+    similary["目标地址"] = doc_goal_address
+    similary_data = similary[["目标地址", "被比较地址", "相似度"]]
+    similary_data= similary_data[similary_data["相似度"]>=ssim]
+    '''
+    similary_data:         目标地址      被比较地址  相似度
+    0  深南东路5047号  深南东路5046号  0.0
+    1  深南东路5047号  深南东路5048号  0.0
+    '''
+    
+    return similary_data
+
 def cycle_first(single_data):
     
     single_value = single_data.loc[:,["公司代码","地址"]].values #提取地址
@@ -189,7 +232,7 @@ def cycle_first(single_data):
     cycle_data = pd. DataFrame([])
     for key, value in enumerate(single_value):
         if key < len(single_data)-1:
-            doc_goal=list(value)[1:]
+            doc_goal=list(value)[1:]  #去掉公司代码 list(value) ['002554', '马甸东路17号11层1212']
             document=list(single_data["地址"])[key+1:]
             cycle = cal_similar(doc_goal, document, ssim=0)
             cycle['目标地址代码'] = list(single_data["公司代码"])[key]
@@ -201,8 +244,25 @@ def cycle_first(single_data):
    
     return cycle_data
 
+def cycle_first2(single_data,dictionary,tfidf):
+    
+    single_value = single_data.loc[:,["公司代码","地址","地址分词","地址词袋"]].values #提取地址
+    
+    cycle_data = pd. DataFrame([])
+    for key, doc_goal in enumerate(single_value):
+        if key < len(single_data)-1:
+            doc_candidates=single_data[key+1:]
+            cycle = cal_similar2(doc_goal, doc_candidates, dictionary,tfidf,ssim=0)
+            cycle['目标地址代码'] = list(single_data["公司代码"])[key]
+            cycle['被比较地址代码'] = list(single_data["公司代码"])[key+1:]
+            cycle = cycle[["目标地址代码","目标地址", "被比较地址代码", "被比较地址", "相似度"]]
+            #print("循环第",key,"个地址,得到表的行数,",len(cycle),",当前子循环计算进度,",key/len(cycle))
+        cycle_data = cycle_data.append(cycle)
+        cycle_data = cycle_data.drop_duplicates()
+   
+    return cycle_data
 
-def get_collect(dataset):
+def get_collect(dataset,dictionary,tfidf):
 
     start = time. clock()
     
@@ -212,8 +272,8 @@ def get_collect(dataset):
     for v, word in enumerate(ssq):
         single_data = dataset[dataset['省市区'] == word]
         print("循环第",v,"个省市区地址为:",word,",当前此区地址有:",len(single_data),",当前计算进度为:{:.1f}%" .format(v*100/len(ssq)))
-        cycle_data = cycle_first(single_data)
-        print("cycle_data",cycle_data)
+        cycle_data = cycle_first2(single_data,dictionary,tfidf)
+        # print("cycle_data",cycle_data)
         '''
         目标地址代码       目标地址 被比较地址代码      被比较地址  相似度
         0       1  深南东路5047号  000005  深南东路5046号  0.0
@@ -236,9 +296,9 @@ def run_(par = 0):
     dataset_1, dataset_2 = get_dataset(addr_df)
     # dataset_1.to_csv("data/address1_cv.csv", index =False)
     # dataset_2.to_csv("data/address2_cv.csv", index =False)
-    # dataset. to_csv( ". /data/addr_data/document_address. csv", index False)
-    collect_data_1 = get_collect(dataset_1)
-    collect_data_2 = get_collect(dataset_2)
+    dataset_1, dataset_2 , dictionary,tfidf = dataset_cut_tfidf(dataset_1, dataset_2)
+    collect_data_1 = get_collect(dataset_1,dictionary,tfidf)
+    collect_data_2 = get_collect(dataset_2,dictionary,tfidf)
     collect_data = pd.concat([collect_data_1, collect_data_2], axis=0)
     collect_data = collect_data[collect_data["相似度"]>=par].sort_values(by=["相似度"], ascending=[False])
     
@@ -247,6 +307,6 @@ def run_(par = 0):
     return collect_data
 
 
-collect_data = run_(par = 0.7)
+collect_data = run_(par = 0.1)
 print(collect_data)
-#collect_data.to_excel("data/result.xlsx")
+collect_data.to_excel("data/result大改后.xlsx")
