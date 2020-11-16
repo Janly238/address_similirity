@@ -8,9 +8,9 @@ from gensim import corpora, models, similarities
 
 def read_data():
     #导入数据,并对数据做一些处理
-    df = pd.read_excel("data/public_company.xlsx", dtype={'公司代码': 'str'})
-    addr_df = df[["公司代码", "公司简称", "注册地址"]]
-    addr_df["注册地址"]= addr_df["注册地址"].apply(lambda x: str(x).strip())
+    df = pd.read_csv("data/khh_address.tsv", sep="\t",dtype={'id': 'str'})[:500]
+    addr_df = df[["id", "b.dz1"]]
+    addr_df["b.dz1"]= addr_df["b.dz1"].apply(lambda x: str(x).strip())
     return addr_df
 
 # df = read_data()
@@ -26,17 +26,17 @@ def get_dataset(addr_df):
     start = time.clock()
     
     location_str = []
-    for i in addr_df['注册地址']:
+    for i in addr_df['b.dz1']:
         location_str.append(i.strip())
         
     addr_cp = cpca.transform(location_str,cut=False,open_warning=False)
     
     #给结果表拼接唯一识别代码
-    e_data = addr_df[["公司代码", "公司简称"]]
+    e_data = addr_df[["id"]]
     addr_cpca = pd.concat([e_data, addr_cp], axis=1)
     # print(addr_cpca)
     '''
-        公司代码   公司简称    省    市    区                                    地址
+        id   公司简称    省    市    区                                    地址
     0       1   平安银行  广东省  深圳市  罗湖区                             深南东路5047号
     1  000002  万  科Ａ  广东省  深圳市  盐田区                         大梅沙环梅路33号万科中心
     2  000004   国农科技  广东省  深圳市  南山区            中心路（深圳湾段）3333号中铁南方总部大厦503室
@@ -78,7 +78,7 @@ def get_dataset(addr_df):
     dataset_1 = pd.merge(addr_cpca_1, count_delete_1, on = '省市区', how = 'left')
     # print(dataset_1)
     '''merge合并，个数为1的填1，没有的话填nan
-            公司代码   公司简称    省    市    区                                    地址        省市区  省市区长度   个数
+            id   公司简称    省    市    区                                    地址        省市区  省市区长度   个数
     0       1   平安银行  广东省  深圳市  罗湖区                             深南东路5047号  广东省深圳市罗湖区      9  NaN
     1  000002  万  科Ａ  广东省  深圳市  盐田区                         大梅沙环梅路33号万科中心  广东省深圳市盐田区      9  1.0
     2  000004   国农科技  广东省  深圳市  南山区            中心路（深圳湾段）3333号中铁南方总部大厦503室  广东省深圳市南山区      9  1.0
@@ -90,7 +90,7 @@ def get_dataset(addr_df):
     '''
     dataset_1= dataset_1[dataset_1['个数']!=1]
     '''筛个数不等于1的
-    公司代码  公司简称    省    市    区         地址        省市区  省市区长度  个数
+    id  公司简称    省    市    区         地址        省市区  省市区长度  个数
     0       1  平安银行  广东省  深圳市  罗湖区  深南东路5047号  广东省深圳市罗湖区      9 NaN
     3  000005  世纪星源  广东省  深圳市  罗湖区  深南东路5046号  广东省深圳市罗湖区      9 NaN
     4  000006  深振业Ａ  广东省  深圳市  罗湖区  深南东路5048号  广东省深圳市罗湖区      9 NaN
@@ -198,10 +198,10 @@ def cal_similar2(doc_goal, doc_candidates, dictionary,tfidf, ssim = 0.7):
     document,多个文本,被比较的多个文档
     '''
     #目标地址词袋
-    doc_goal_vec = doc_goal[-1]#["公司代码","地址","地址分词","地址词袋"]].values
+    doc_goal_vec = doc_goal[-1]#["id","地址","地址分词","地址词袋"]].values
 
     #目标地址
-    doc_goal_address = doc_goal[1]#["公司代码","地址","地址分词","地址词袋"]].values
+    doc_goal_address = doc_goal[1]#["id","地址","地址分词","地址词袋"]].values
 
     index = similarities.Similarity(output_prefix=None,corpus=tfidf[list(doc_candidates["地址词袋"])], num_features = len(dictionary.keys()))#对每个目标文档,分析测文档的相似度
     #开始比较
@@ -227,7 +227,7 @@ def cal_similar2(doc_goal, doc_candidates, dictionary,tfidf, ssim = 0.7):
 
 def cycle_first(single_data):
     
-    single_value = single_data.loc[:,["公司代码","地址"]].values #提取地址
+    single_value = single_data.loc[:,["id","地址"]].values #提取地址
     
     cycle_data = pd. DataFrame([])
     for key, value in enumerate(single_value):
@@ -235,8 +235,8 @@ def cycle_first(single_data):
             doc_goal=list(value)[1:]  #去掉公司代码 list(value) ['002554', '马甸东路17号11层1212']
             document=list(single_data["地址"])[key+1:]
             cycle = cal_similar(doc_goal, document, ssim=0)
-            cycle['目标地址代码'] = list(single_data["公司代码"])[key]
-            cycle['被比较地址代码'] = list(single_data["公司代码"])[key+1:]
+            cycle['目标地址代码'] = list(single_data["id"])[key]
+            cycle['被比较地址代码'] = list(single_data["id"])[key+1:]
             cycle = cycle[["目标地址代码","目标地址", "被比较地址代码", "被比较地址", "相似度"]]
             #print("循环第",key,"个地址,得到表的行数,",len(cycle),",当前子循环计算进度,",key/len(cycle))
         cycle_data = cycle_data.append(cycle)
@@ -246,15 +246,15 @@ def cycle_first(single_data):
 
 def cycle_first2(single_data,dictionary,tfidf):
     
-    single_value = single_data.loc[:,["公司代码","地址","地址分词","地址词袋"]].values #提取地址
+    single_value = single_data.loc[:,["id","地址","地址分词","地址词袋"]].values #提取地址
     
     cycle_data = pd. DataFrame([])
     for key, doc_goal in enumerate(single_value):
         if key < len(single_data)-1:
             doc_candidates=single_data[key+1:]
             cycle = cal_similar2(doc_goal, doc_candidates, dictionary,tfidf,ssim=0)
-            cycle['目标地址代码'] = list(single_data["公司代码"])[key]
-            cycle['被比较地址代码'] = list(single_data["公司代码"])[key+1:]
+            cycle['目标地址代码'] = list(single_data["id"])[key]
+            cycle['被比较地址代码'] = list(single_data["id"])[key+1:]
             cycle = cycle[["目标地址代码","目标地址", "被比较地址代码", "被比较地址", "相似度"]]
             #print("循环第",key,"个地址,得到表的行数,",len(cycle),",当前子循环计算进度,",key/len(cycle))
         cycle_data = cycle_data.append(cycle)
@@ -309,4 +309,4 @@ def run_(par = 0):
 
 collect_data = run_(par = 0.1)
 print(collect_data)
-collect_data.to_excel("data/result大改后.xlsx")
+collect_data.to_excel("data/result大改后_tmp.xlsx")
